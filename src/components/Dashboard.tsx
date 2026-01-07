@@ -1,9 +1,7 @@
-
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  Activity, FileText, Users, AlertTriangle, TrendingUp, Clock, CheckCircle, 
-  FileBarChart, ChevronUp, ChevronDown, ShieldCheck, Megaphone, Briefcase, History,
-  DollarSign, Scale
+  Activity, FileBarChart, AlertTriangle, TrendingUp, ChevronUp, ChevronDown, ShieldCheck, Megaphone,
+  DollarSign, Scale, History, Loader2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { 
@@ -11,25 +9,12 @@ import {
   PieChart, Pie, Cell
 } from 'recharts';
 import { User } from '../services/authContext';
-import { UserRole } from '../types';
+import { UserRole, PartnershipStatus } from '../types';
+import { supabase } from '../lib/supabase';
 
-const data = [
-  { name: 'Jan', valor: 420000 },
-  { name: 'Fev', valor: 380000 },
-  { name: 'Mar', valor: 510000 },
-  { name: 'Abr', valor: 490000 },
-  { name: 'Mai', valor: 620000 },
-  { name: 'Jun', valor: 580000 },
-];
+interface DashboardProps { user: User; }
 
-const COLORS_PIE = ['#0f766e', '#0d9488', '#f59e0b', '#ef4444'];
-const pieData = [
-  { name: 'Em Execução', value: 45 },
-  { name: 'Celebradas', value: 25 },
-  { name: 'Contas em Análise', value: 20 },
-  { name: 'Prazos Vencidos', value: 10 },
-];
-
+// Componente Visual do Card
 const StatCard = ({ title, value, icon: Icon, color, trend, pulse }: any) => (
   <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 hover:shadow-xl transition-all relative overflow-hidden group">
     {pulse && (
@@ -56,18 +41,133 @@ const StatCard = ({ title, value, icon: Icon, color, trend, pulse }: any) => (
   </div>
 );
 
-interface DashboardProps { user: User; }
-
 const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const isOSC = user.role === UserRole.OSC_LEGAL || user.role === UserRole.OSC_USER;
+  
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    activePartnerships: 0,
+    totalValue: 0,
+    chamamentosCount: 0,
+    alertsCount: 0
+  });
+  const [pieData, setPieData] = useState<any[]>([]);
+  
+  // Dados Mockados para o Gráfico de Barras (Difícil calcular real sem tabela de transações financeiras detalhada)
+  const barData = [
+    { name: 'Jan', valor: 120000 },
+    { name: 'Fev', valor: 150000 },
+    { name: 'Mar', valor: 180000 },
+    { name: 'Abr', valor: 200000 },
+    { name: 'Mai', valor: 160000 },
+    { name: 'Jun', valor: 250000 },
+  ];
+
+  const COLORS_PIE = ['#0f766e', '#0d9488', '#f59e0b', '#ef4444', '#6366f1'];
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [user]);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+
+      // 1. Buscando Parcerias (Aplicando filtro se for OSC)
+      let query = supabase.from('partnerships').select('id, status, total_value, osc_id');
+      
+      // Se for OSC, precisamos filtrar. Como o user.id está na tabela profiles e vinculado ao osc_id...
+      // Simplificação: Assumindo que o filtro de RLS do Supabase já cuida disso se configurado, 
+      // ou filtramos manualmente se tivermos o oscId no contexto.
+      // Para garantir, vamos confiar nas Policies (RLS) que criamos no SQL.
+      
+      const { data: partnerships, error: partError } = await query;
+      if (partError) throw partError;
+
+      // 2. Buscando Chamamentos (Geral)
+      const { count: chamamentosCount } = await supabase
+        .from('chamamentos')
+        .select('*', { count: 'exact', head: true });
+
+      // 3. Buscando Alertas (OSCs com CND vencida)
+      const { count: alertsCount } = await supabase
+        .from('oscs')
+        .select('*', { count: 'exact', head: true })
+        .eq('cnd_status', 'expired');
+
+      // PROCESSAMENTO DOS DADOS
+      const activeCount = partnerships?.length || 0;
+      const totalVal = partnerships?.reduce((acc, curr) => acc + (curr.total_value || 0), 0) || 0;
+
+      // Agrupamento para o Gráfico de Pizza
+      const statusMap: Record<string, number> = {};
+      partnerships?.forEach(p => {
+        // Traduzindo status do banco para label legível
+        const label = translateStatus(p.status);
+        statusMap[label] = (statusMap[label] || 0) + 1;
+      });
+
+      const processedPieData = Object.keys(statusMap).map(key => ({
+        name: key,
+        value: statusMap[key]
+      }));
+
+      // Se não tiver dados, coloca um placeholder para o gráfico não quebrar
+      if (processedPieData.length === 0) {
+        processedPieData.push({ name: 'Sem dados', value: 1 });
+      }
+
+      setStats({
+        activePartnerships: activeCount,
+        totalValue: totalVal,
+        chamamentosCount: chamamentosCount || 0,
+        alertsCount: alertsCount || 0
+      });
+      setPieData(processedPieData);
+
+    } catch (error) {
+      console.error('Erro ao carregar dashboard:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const translateStatus = (status: string) => {
+    const map: Record<string, string> = {
+      'proposal': 'Em Proposta',
+      'analysis': 'Em Análise',
+      'approved': 'Aprovada',
+      'active': 'Em Execução',
+      'execution': 'Em Execução',
+      'concluded': 'Concluída',
+      'rejected': 'Rejeitada'
+    };
+    return map[status] || status;
+  };
+
+  const formatCurrency = (val: number) => {
+    // Formatação compacta: 1.2M, 500K ou valor total
+    if (val > 1000000) return `R$ ${(val / 1000000).toFixed(1)}M`;
+    if (val > 1000) return `R$ ${(val / 1000).toFixed(0)}K`;
+    return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  };
+
+  if (loading) {
+    return (
+       <div className="flex items-center justify-center h-screen text-teal-600">
+          <Loader2 className="animate-spin mr-2" size={40} />
+          <span className="font-bold text-xl tracking-widest">Carregando Indicadores...</span>
+       </div>
+    );
+  }
 
   return (
-    <div className="space-y-10 animate-in fade-in duration-700">
+    <div className="space-y-10 animate-in fade-in duration-700 pb-20">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
         <div>
           <div className="flex items-center space-x-3 text-[10px] font-black text-teal-600 uppercase tracking-widest mb-3">
             <div className="w-10 h-px bg-teal-600/30"></div>
-            <span>Unidade Unaí/MG • Exercício 2023</span>
+            <span>Unidade Unaí/MG • Exercício {new Date().getFullYear()}</span>
           </div>
           <h2 className="text-5xl font-black text-gray-900 tracking-tighter">
             {isOSC ? 'Painel da Instituição' : 'Gestão Estratégica MROSC'}
@@ -75,7 +175,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           <p className="text-gray-500 font-medium italic mt-2">"Lei Municipal 3.083/17 e Decreto 7.259/23."</p>
         </div>
         <div className="flex gap-4 w-full md:w-auto">
-          <Link to="/transparency" className="flex-1 md:flex-none px-8 py-4 bg-white border border-gray-200 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-50 flex items-center justify-center gap-3 transition-all shadow-sm">
+          <Link to="/transparency" className="flex-1 md:flex-none px-8 py-4 bg-white border border-gray-200 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-50 flex items-center justify-center gap-3 transition-all shadow-sm text-gray-700">
             <ShieldCheck size={18} /> Transparência
           </Link>
           {!isOSC && (
@@ -87,10 +187,32 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       </header>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-        <StatCard title="Parcerias Ativas" value={isOSC ? "02" : "114"} icon={Activity} color="teal" trend={{ value: 8, positive: true }} />
-        <StatCard title="Emendas Alocadas" value="R$ 1.8M" icon={DollarSign} color="indigo" />
-        <StatCard title="Chamamentos" value="05" icon={Megaphone} color="blue" />
-        <StatCard title="Alertas Críticos" value="03" icon={AlertTriangle} color="amber" pulse={true} />
+        <StatCard 
+          title="Parcerias / Propostas" 
+          value={stats.activePartnerships.toString().padStart(2, '0')} 
+          icon={Activity} 
+          color="teal" 
+          trend={{ value: 12, positive: true }} 
+        />
+        <StatCard 
+          title="Recursos Geridos" 
+          value={formatCurrency(stats.totalValue)} 
+          icon={DollarSign} 
+          color="indigo" 
+        />
+        <StatCard 
+          title="Editais Abertos" 
+          value={stats.chamamentosCount.toString().padStart(2, '0')} 
+          icon={Megaphone} 
+          color="blue" 
+        />
+        <StatCard 
+          title="Alertas de CND" 
+          value={stats.alertsCount.toString().padStart(2, '0')} 
+          icon={AlertTriangle} 
+          color="amber" 
+          pulse={stats.alertsCount > 0} 
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -110,7 +232,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           </div>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data}>
+              <BarChart data={barData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 700 }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 700 }} />
@@ -137,9 +259,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           </div>
           <div className="mt-12 grid grid-cols-2 gap-4 w-full">
             {pieData.map((d, i) => (
-              <div key={i} className="p-5 bg-gray-50 rounded-3xl border border-gray-100 flex flex-col">
-                <span className="text-[9px] font-black text-gray-400 uppercase mb-2">{d.name}</span>
-                <span className="text-xl font-black text-gray-900">{d.value}%</span>
+              <div key={i} className="p-4 bg-gray-50 rounded-3xl border border-gray-100 flex flex-col">
+                <span className="text-[9px] font-black text-gray-400 uppercase mb-2 truncate" title={d.name}>{d.name}</span>
+                <span className="text-lg font-black text-gray-900">{d.value}</span>
               </div>
             ))}
           </div>
@@ -165,7 +287,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           <div className="grid grid-cols-2 gap-4 relative z-10">
              <div className="p-6 bg-white/5 backdrop-blur-md rounded-3xl border border-white/10 text-center">
                 <span className="block text-[9px] font-black text-teal-400 uppercase mb-2">Logs Hoje</span>
-                <span className="text-2xl font-black">1.242</span>
+                <span className="text-2xl font-black">124</span>
              </div>
              <div className="p-6 bg-white/5 backdrop-blur-md rounded-3xl border border-white/10 text-center">
                 <span className="block text-[9px] font-black text-teal-400 uppercase mb-2">Integridade</span>
