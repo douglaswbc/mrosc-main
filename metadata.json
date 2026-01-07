@@ -1,0 +1,9 @@
+{
+  "name": "MROSC Digital - Prefeitura de Unaí/MG",
+  "description": "Plataforma SaaS para gestão de Emendas e Parcerias (Lei 13.019/14 e Lei Municipal 3.083/17). Unidade: Controladoria Interna e de Transparência Pública (CITP).",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
