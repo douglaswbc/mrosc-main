@@ -1,4 +1,3 @@
-
 export enum PartnershipStatus {
   PLANNING = 'Planejamento',
   SELECTION = 'Chamamento',
@@ -10,19 +9,35 @@ export enum PartnershipStatus {
   SUSPENDED = 'Suspensa'
 }
 
+// CORREÇÃO AQUI: Os valores devem bater com o Banco de Dados (Postgres Enum)
 export enum UserRole {
-  MASTER = 'Administrador Master',
-  CONTROL = 'Controle Interno',
-  GESTOR = 'Gestor da Parceria',
-  SELECTION_COMMISSION = 'Comissão de Seleção',
-  MONITORING_COMMISSION = 'Comissão de Monitoramento',
-  COUNCILS = 'Conselhos Municipais',
-  TECH_PHYSICAL = 'Técnico - Execução Física',
-  TECH_FINANCIAL = 'Técnico - Execução Financeira',
-  LEGAL = 'Procuradoria Jurídica',
-  OSC_LEGAL = 'Representante Legal OSC',
-  OSC_USER = 'Usuário OSC'
+  MASTER = 'MASTER',
+  CONTROL = 'CONTROL',
+  GESTOR = 'GESTOR',
+  SELECTION_COMMISSION = 'SELECTION_COMMISSION',
+  MONITORING_COMMISSION = 'MONITORING_COMMISSION',
+  COUNCILS = 'COUNCILS',
+  TECH_PHYSICAL = 'TECH_PHYSICAL',
+  TECH_FINANCIAL = 'TECH_FINANCIAL',
+  LEGAL = 'LEGAL',
+  OSC_LEGAL = 'OSC_LEGAL',
+  OSC_USER = 'OSC_USER'
 }
+
+// Mapa para exibir nomes bonitos na tela (UI)
+export const RoleLabels: Record<string, string> = {
+  MASTER: 'Administrador Master',
+  CONTROL: 'Controle Interno',
+  GESTOR: 'Gestor da Parceria',
+  SELECTION_COMMISSION: 'Comissão de Seleção',
+  MONITORING_COMMISSION: 'Comissão de Monitoramento',
+  COUNCILS: 'Conselhos Municipais',
+  TECH_PHYSICAL: 'Técnico - Exec. Física',
+  TECH_FINANCIAL: 'Técnico - Exec. Financeira',
+  LEGAL: 'Procuradoria Jurídica',
+  OSC_LEGAL: 'Rep. Legal OSC',
+  OSC_USER: 'Usuário OSC'
+};
 
 export enum OSCStatus {
   REGULAR = 'Regular',
@@ -32,10 +47,10 @@ export enum OSCStatus {
 }
 
 export interface CNDRecord {
-  provider: 'Receita Federal' | 'Caixa (FGTS)' | 'TCU' | 'Tribunal de Justiça';
+  provider: string;
   issueDate: string;
   expiryDate: string;
-  status: 'Regular' | 'Irregular' | 'Vencida';
+  status: 'Regular' | 'Irregular' | 'Vencida' | 'Pendente';
   documentCode: string;
 }
 
@@ -59,8 +74,8 @@ export interface Amendment {
   description: string;
   type: 'Impositiva' | 'Ordinária';
   indicationType: 'Direta' | 'Indireta';
-  legalDeadline: string; // Decreto 7.259 Unaí
-  status: 'Pendente' | 'Vinculada' | 'Executada';
+  legalDeadline: string;
+  status: 'Pendente' | 'Vinculada' | 'Executada' | 'Paga';
   beneficiaryOSC?: string;
 }
 
@@ -75,6 +90,23 @@ export interface Chamamento {
   proposalsCount: number;
 }
 
+export interface Goal {
+  id: string;
+  description: string;
+  target: string;
+  indicator?: string;
+  progress: number;
+  status: 'Pendente' | 'Em Andamento' | 'Concluída';
+}
+
+export interface Tranche {
+  id: string;
+  value: number;
+  expectedDate: string;
+  releasedDate?: string;
+  status: 'Pendente' | 'Liberada' | 'Bloqueada';
+}
+
 export interface Partnership {
   id: string;
   title: string;
@@ -87,20 +119,4 @@ export interface Partnership {
   goals: Goal[];
   tranches: Tranche[];
   workPlanVersion: number;
-}
-
-export interface Goal {
-  id: string;
-  description: string;
-  target: string;
-  progress: number;
-  status: 'Pendente' | 'Em Andamento' | 'Concluída';
-}
-
-export interface Tranche {
-  id: string;
-  value: number;
-  expectedDate: string;
-  releasedDate?: string;
-  status: 'Pendente' | 'Liberada' | 'Bloqueada';
 }

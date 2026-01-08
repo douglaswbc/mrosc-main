@@ -19,9 +19,10 @@ import LegislationModule from './components/Legislation';
 import CommunicationModule from './components/Communication';
 import ManualModule from './components/Manual';
 import ReportsModule from './components/Reports';
-import UsersManagement from './components/UsersManagement';
+import UsersManagement from './components/UsersManagement'; // Certifique-se que o arquivo existe
 
 import { useAuth, getAccessibleRoutes, AuthProvider } from './services/authContext';
+import { RoleLabels, UserRole } from './types'; // Importando UserRole para comparar corretamente
 
 const SidebarItem = ({ 
   to, 
@@ -39,6 +40,7 @@ const SidebarItem = ({
   onClick?: () => void 
 }) => {
   if (hidden) return null;
+  
   return (
     <Link 
       to={to} 
@@ -58,7 +60,6 @@ const AppContent: React.FC = () => {
   const { user, loading, signOut } = useAuth();
   const location = useLocation();
 
-  // Ajusta estado ao redimensionar a tela
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 768) {
@@ -90,17 +91,31 @@ const AppContent: React.FC = () => {
   }
 
   const routes = getAccessibleRoutes(user.role);
+  
+  // Função de verificação de acesso refinada
   const canAccess = (key: string) => {
-    if (key.startsWith('/')) return routes.includes('all') || routes.includes(key);
+    // 1. Se o usuário for MASTER, libera tudo imediatamente
+    if (user.role === UserRole.MASTER || user.role === 'MASTER') return true;
+
+    // 2. Verifica rotas (começa com /)
+    if (key.startsWith('/')) {
+        return routes.includes('all') || routes.includes(key);
+    }
+    
+    // 3. Verifica capabilities específicas
     if (routes.includes('all')) return true;
-    if (key === 'MANAGE_USERS' && user.role === 'MASTER') return true;
+    
+    // Fallback específico para gestão de usuários (apenas MASTER)
+    if (key === 'MANAGE_USERS') {
+        return user.role === UserRole.MASTER || user.role === 'MASTER';
+    }
+    
     return false;
   };
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden font-sans relative">
       
-      {/* OVERLAY MOBILE (Só aparece em telas pequenas quando menu aberto) */}
       {isSidebarOpen && (
         <div 
           className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity"
@@ -108,18 +123,13 @@ const AppContent: React.FC = () => {
         />
       )}
 
-      {/* SIDEBAR CORRIGIDA */}
       <aside 
         className={`
           bg-teal-800 text-white 
           h-full z-50
           border-r border-teal-700/50 overflow-y-auto scrollbar-hide
           transition-all duration-300 ease-in-out
-          
-          /* Comportamento Híbrido: Fixed no Mobile, Relative no Desktop */
           fixed md:relative 
-          
-          /* Lógica de Largura e Posição */
           ${isSidebarOpen ? 'w-72 translate-x-0' : 'w-72 -translate-x-full md:w-0 md:translate-x-0 md:overflow-hidden'}
         `}
       >
@@ -133,7 +143,6 @@ const AppContent: React.FC = () => {
               <p className="text-[9px] font-bold text-teal-300 uppercase tracking-widest mt-1">RBAC Compliance v3.0</p>
             </div>
           </div>
-          {/* Botão fechar só no mobile */}
           <button className="md:hidden text-teal-200 hover:text-white" onClick={() => setIsSidebarOpen(false)}>
             <X size={24} />
           </button>
@@ -161,11 +170,20 @@ const AppContent: React.FC = () => {
         <nav className="px-4 space-y-1 mb-24">
           <SidebarItem onClick={handleMobileClick} to="/logs" icon={History} label="Audit Trail (LGPD)" active={location.pathname === '/logs'} hidden={!canAccess('/logs')} />
           <SidebarItem onClick={handleMobileClick} to="/manual" icon={BookOpen} label="Manual do Sistema" active={location.pathname === '/manual'} hidden={!canAccess('/manual')} />
-          <SidebarItem onClick={handleMobileClick} to="/users" icon={Users} label="Gerenciar Usuários" active={location.pathname === '/users'} hidden={!canAccess('MANAGE_USERS')} />
+          
+          {/* MENU EXCLUSIVO MASTER */}
+          <SidebarItem 
+            onClick={handleMobileClick}
+            to="/users" 
+            icon={Users} 
+            label="Gerenciar Usuários" 
+            active={location.pathname === '/users'} 
+            hidden={!canAccess('MANAGE_USERS')} 
+          />
+          
           <SidebarItem onClick={handleMobileClick} to="/transparency" icon={Eye} label="Portal Público" active={false} />
         </nav>
 
-        {/* User Profile Footer */}
         <div className="fixed bottom-0 w-72 p-6 bg-teal-900 border-t border-teal-700/30">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center font-black text-teal-900 shadow-lg uppercase shrink-0">
@@ -173,7 +191,10 @@ const AppContent: React.FC = () => {
             </div>
             <div className="overflow-hidden flex-1">
               <p className="font-bold text-white text-xs truncate">{user.name}</p>
-              <p className="text-teal-400 text-[10px] uppercase font-black tracking-tighter truncate">{user.role}</p>
+              {/* Exibindo nome bonito do cargo e DEBUG se necessário */}
+              <p className="text-teal-400 text-[10px] uppercase font-black tracking-tighter truncate">
+                {RoleLabels[user.role] || user.role}
+              </p>
             </div>
             <button onClick={signOut} title="Sair do Sistema" className="ml-auto text-teal-500 hover:text-white transition-colors">
               <LogOut size={18} />
@@ -182,7 +203,6 @@ const AppContent: React.FC = () => {
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         <header className="bg-white/80 backdrop-blur-md border-b h-20 flex items-center justify-between px-8 z-10 shrink-0">
           <div className="flex items-center space-x-6">
@@ -230,6 +250,8 @@ const AppContent: React.FC = () => {
             <Route path="/communication" element={canAccess('/communication') ? <CommunicationModule /> : <AccessDenied />} />
             <Route path="/logs" element={canAccess('/logs') ? <AuditLogsModule /> : <AccessDenied />} />
             <Route path="/manual" element={<ManualModule />} />
+            
+            {/* ROTA MASTER */}
             <Route path="/users" element={canAccess('MANAGE_USERS') ? <UsersManagement /> : <AccessDenied /> } />
           </Routes>
         </div>
