@@ -19,10 +19,10 @@ import LegislationModule from './components/Legislation';
 import CommunicationModule from './components/Communication';
 import ManualModule from './components/Manual';
 import ReportsModule from './components/Reports';
-import UsersManagement from './components/UsersManagement'; // Certifique-se que o arquivo existe
+import UsersManagement from './components/UsersManagement';
 
 import { useAuth, getAccessibleRoutes, AuthProvider } from './services/authContext';
-import { RoleLabels, UserRole } from './types'; // Importando UserRole para comparar corretamente
+import { RoleLabels, UserRole } from './types';
 
 const SidebarItem = ({ 
   to, 
@@ -40,7 +40,6 @@ const SidebarItem = ({
   onClick?: () => void 
 }) => {
   if (hidden) return null;
-  
   return (
     <Link 
       to={to} 
@@ -91,31 +90,20 @@ const AppContent: React.FC = () => {
   }
 
   const routes = getAccessibleRoutes(user.role);
-  
-  // Função de verificação de acesso refinada
   const canAccess = (key: string) => {
-    // 1. Se o usuário for MASTER, libera tudo imediatamente
+    // Permissão total para MASTER
     if (user.role === UserRole.MASTER || user.role === 'MASTER') return true;
 
-    // 2. Verifica rotas (começa com /)
-    if (key.startsWith('/')) {
-        return routes.includes('all') || routes.includes(key);
-    }
-    
-    // 3. Verifica capabilities específicas
+    if (key.startsWith('/')) return routes.includes('all') || routes.includes(key);
     if (routes.includes('all')) return true;
-    
-    // Fallback específico para gestão de usuários (apenas MASTER)
-    if (key === 'MANAGE_USERS') {
-        return user.role === UserRole.MASTER || user.role === 'MASTER';
-    }
-    
+    if (key === 'MANAGE_USERS') return user.role === UserRole.MASTER || user.role === 'MASTER';
     return false;
   };
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden font-sans relative">
       
+      {/* Overlay Mobile */}
       {isSidebarOpen && (
         <div 
           className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity"
@@ -123,6 +111,7 @@ const AppContent: React.FC = () => {
         />
       )}
 
+      {/* SIDEBAR LIMPA (Sem o rodapé de perfil) */}
       <aside 
         className={`
           bg-teal-800 text-white 
@@ -167,11 +156,10 @@ const AppContent: React.FC = () => {
         </nav>
 
         <div className="px-4 py-6 text-[10px] font-black text-teal-400/50 uppercase tracking-widest mt-4 border-t border-teal-700/30 whitespace-nowrap">Controle e Ajuda</div>
-        <nav className="px-4 space-y-1 mb-24">
+        <nav className="px-4 space-y-1 pb-10">
           <SidebarItem onClick={handleMobileClick} to="/logs" icon={History} label="Audit Trail (LGPD)" active={location.pathname === '/logs'} hidden={!canAccess('/logs')} />
           <SidebarItem onClick={handleMobileClick} to="/manual" icon={BookOpen} label="Manual do Sistema" active={location.pathname === '/manual'} hidden={!canAccess('/manual')} />
           
-          {/* MENU EXCLUSIVO MASTER */}
           <SidebarItem 
             onClick={handleMobileClick}
             to="/users" 
@@ -183,27 +171,12 @@ const AppContent: React.FC = () => {
           
           <SidebarItem onClick={handleMobileClick} to="/transparency" icon={Eye} label="Portal Público" active={false} />
         </nav>
-
-        <div className="fixed bottom-0 w-72 p-6 bg-teal-900 border-t border-teal-700/30">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center font-black text-teal-900 shadow-lg uppercase shrink-0">
-              {user.name.substring(0,2)}
-            </div>
-            <div className="overflow-hidden flex-1">
-              <p className="font-bold text-white text-xs truncate">{user.name}</p>
-              {/* Exibindo nome bonito do cargo e DEBUG se necessário */}
-              <p className="text-teal-400 text-[10px] uppercase font-black tracking-tighter truncate">
-                {RoleLabels[user.role] || user.role}
-              </p>
-            </div>
-            <button onClick={signOut} title="Sair do Sistema" className="ml-auto text-teal-500 hover:text-white transition-colors">
-              <LogOut size={18} />
-            </button>
-          </div>
-        </div>
+        {/* Rodapé removido daqui */}
       </aside>
 
+      {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+        {/* HEADER COM PERFIL E LOGOUT */}
         <header className="bg-white/80 backdrop-blur-md border-b h-20 flex items-center justify-between px-8 z-10 shrink-0">
           <div className="flex items-center space-x-6">
             <button className="text-gray-400 hover:text-teal-600 transition-colors p-2 hover:bg-teal-50 rounded-xl" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
@@ -220,19 +193,40 @@ const AppContent: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-6">
-              <div className="flex flex-col items-end mr-4 hidden sm:flex">
+            {/* Informação do Ambiente */}
+            <div className="flex flex-col items-end mr-2 hidden sm:flex">
                 <span className="text-[10px] font-black text-teal-600 uppercase">Ambiente Seguro</span>
                 <span className="text-[9px] text-gray-400 font-bold">{user.department || 'Externo'}</span>
-              </div>
+            </div>
+
+            {/* Notificações */}
             <div className="relative cursor-pointer group">
               <Bell className="text-gray-400 group-hover:text-teal-600 transition-colors" size={20} />
               <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-black w-4 h-4 flex items-center justify-center rounded-full border-2 border-white">3</span>
             </div>
+
+            {/* Divisória */}
             <div className="h-10 w-px bg-gray-100 hidden sm:block"></div>
-            <button className="flex items-center space-x-2 text-[10px] font-black text-gray-500 uppercase tracking-widest hover:text-teal-600 transition-colors">
-              <UserCircle size={20} />
-              <span className="hidden sm:inline">Perfil</span>
-            </button>
+
+            {/* PERFIL E LOGOUT NO CABEÇALHO */}
+            <div className="flex items-center gap-3 pl-2">
+                 <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-500 to-teal-700 flex items-center justify-center font-black text-white shadow-lg shadow-teal-500/20 text-xs cursor-pointer hover:scale-105 transition-transform">
+                    {user.name.substring(0,2)}
+                 </div>
+                 <div className="hidden md:block text-right">
+                    <p className="text-sm font-bold text-gray-800 leading-none">{user.name}</p>
+                    <p className="text-[10px] font-bold text-teal-600 uppercase mt-1">
+                      {RoleLabels[user.role] || user.role}
+                    </p>
+                 </div>
+                 <button 
+                    onClick={signOut} 
+                    title="Sair do Sistema" 
+                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all ml-2"
+                 >
+                    <LogOut size={18} />
+                 </button>
+            </div>
           </div>
         </header>
 
@@ -250,8 +244,6 @@ const AppContent: React.FC = () => {
             <Route path="/communication" element={canAccess('/communication') ? <CommunicationModule /> : <AccessDenied />} />
             <Route path="/logs" element={canAccess('/logs') ? <AuditLogsModule /> : <AccessDenied />} />
             <Route path="/manual" element={<ManualModule />} />
-            
-            {/* ROTA MASTER */}
             <Route path="/users" element={canAccess('MANAGE_USERS') ? <UsersManagement /> : <AccessDenied /> } />
           </Routes>
         </div>
